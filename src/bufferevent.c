@@ -26,7 +26,7 @@ BuffereventWriter_vwritef(VSelf, const char *restrict fmt, va_list ap) {
     return evbuffer_add_vprintf(evb, fmt, ap);
 }
 
-static int BuffereventWriter_writef(VSelf, const char *restrict fmt...) {
+static int BuffereventWriter_writef(VSelf, const char *restrict fmt, ...) {
     VSELF(BuffereventWriter);
 
     assert(self);
