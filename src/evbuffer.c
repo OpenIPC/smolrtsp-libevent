@@ -43,3 +43,10 @@ SmolRTSP_Writer smolrtsp_evbuffer_writer(struct evbuffer *evb) {
 
     return DYN(EvbufferWriter, SmolRTSP_Writer, evb);
 }
+
+CharSlice99 smolrtsp_evbuffer_slice(struct evbuffer *evb) {
+    assert(evb);
+
+    return CharSlice99_new(
+        (char *)evbuffer_pullup(evb, -1), evbuffer_get_length(evb));
+}
