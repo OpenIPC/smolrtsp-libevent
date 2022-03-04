@@ -2,3 +2,4 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 AlignAfterOpenBracket: AlwaysBreak
 AlignConsecutiveMacros: true
+StatementMacros: ["vfunc99", "vfuncDefault99"]
