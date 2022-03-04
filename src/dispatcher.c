@@ -91,6 +91,12 @@ void *smolrtsp_libevent_ctx(SmolRTSP_Controller controller) {
     return self;
 }
 
+SmolRTSP_Controller smolrtsp_libevent_ctx_controller(void *ctx) {
+    assert(ctx);
+
+    return ((DispatchCtx *)ctx)->controller;
+}
+
 void smolrtsp_libevent_ctx_free(void *ctx) {
     assert(ctx);
 
