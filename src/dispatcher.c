@@ -3,6 +3,7 @@
 #include <smolrtsp-libevent/bufferevent.h>
 #include <smolrtsp-libevent/evbuffer.h>
 
+#include <smolrtsp/context.h>
 #include <smolrtsp/types/request.h>
 #include <smolrtsp/types/response.h>
 #include <smolrtsp/types/status_code.h>
@@ -44,12 +45,8 @@ void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
             otherwise return; // Partial input, skip it.
         }
         of(SmolRTSP_ParseResult_Failure, _) {
-            if (smolrtsp_respond(
-                    conn, 0, SMOLRTSP_STATUS_BAD_REQUEST, "Malformed request",
-                    SmolRTSP_HeaderMap_empty()) < 0) {
-                // TODO: replace with a generic logging interface.
-                perror("Failed to respond");
-            }
+            // TODO: handler properly.
+            fputs("Failed to parse the request", stderr);
 
             evbuffer_drain(input, buf.len);
             return;
@@ -60,26 +57,30 @@ void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
 static void dispatch(
     SmolRTSP_Writer conn, SmolRTSP_Request req,
     SmolRTSP_Controller controller) {
-    VCALL(controller, before, conn, &req);
+    SmolRTSP_Context *ctx = SmolRTSP_Context_new(conn, req.cseq);
+
+    VCALL(controller, before, ctx, &req);
 
     const SmolRTSP_Method method = req.start_line.method;
 
     ssize_t ret;
     if (SmolRTSP_Method_eq(method, SMOLRTSP_METHOD_OPTIONS)) {
-        ret = VCALL(controller, options, conn, &req);
+        ret = VCALL(controller, options, ctx, &req);
     } else if (SmolRTSP_Method_eq(method, SMOLRTSP_METHOD_DESCRIBE)) {
-        ret = VCALL(controller, describe, conn, &req);
+        ret = VCALL(controller, describe, ctx, &req);
     } else if (SmolRTSP_Method_eq(method, SMOLRTSP_METHOD_SETUP)) {
-        ret = VCALL(controller, setup, conn, &req);
+        ret = VCALL(controller, setup, ctx, &req);
     } else if (SmolRTSP_Method_eq(method, SMOLRTSP_METHOD_PLAY)) {
-        ret = VCALL(controller, play, conn, &req);
+        ret = VCALL(controller, play, ctx, &req);
     } else if (SmolRTSP_Method_eq(method, SMOLRTSP_METHOD_TEARDOWN)) {
-        ret = VCALL(controller, teardown, conn, &req);
+        ret = VCALL(controller, teardown, ctx, &req);
     } else {
-        ret = VCALL(controller, unknown, conn, &req);
+        ret = VCALL(controller, unknown, ctx, &req);
     }
 
-    VCALL(controller, after, ret, conn, &req);
+    VCALL(controller, after, ret, ctx, &req);
+
+    VTABLE(SmolRTSP_Context, SmolRTSP_Droppable).drop(ctx);
 }
 
 void *smolrtsp_libevent_ctx(SmolRTSP_Controller controller) {
@@ -89,12 +90,6 @@ void *smolrtsp_libevent_ctx(SmolRTSP_Controller controller) {
     assert(self);
     self->controller = controller;
     return self;
-}
-
-SmolRTSP_Controller smolrtsp_libevent_ctx_controller(void *ctx) {
-    assert(ctx);
-
-    return ((DispatchCtx *)ctx)->controller;
 }
 
 void smolrtsp_libevent_ctx_free(void *ctx) {
