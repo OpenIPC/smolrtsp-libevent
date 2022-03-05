@@ -19,9 +19,6 @@ typedef struct {
     SmolRTSP_Controller controller;
 } DispatchCtx;
 
-static void dispatch(
-    SmolRTSP_Writer conn, SmolRTSP_Request req, SmolRTSP_Controller controller);
-
 void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
     assert(bev);
     assert(arg);
