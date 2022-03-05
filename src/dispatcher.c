@@ -39,7 +39,7 @@ void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
     match(res) {
         of(SmolRTSP_ParseResult_Success, status) match(*status) {
             of(SmolRTSP_ParseStatus_Complete, offset) {
-                dispatch(conn, req, ctx->controller);
+                smolrtsp_dispatch(conn, ctx->controller, &req);
                 evbuffer_drain(input, *offset);
             }
             otherwise return; // Partial input, skip it.
@@ -52,40 +52,6 @@ void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
             return;
         }
     }
-}
-
-static void dispatch(
-    SmolRTSP_Writer conn, SmolRTSP_Request req,
-    SmolRTSP_Controller controller) {
-    SmolRTSP_Context *ctx = SmolRTSP_Context_new(conn, req.cseq);
-
-    VCALL(controller, before, ctx, &req);
-
-    const SmolRTSP_Method method = req.start_line.method,
-                          options = SMOLRTSP_METHOD_OPTIONS,
-                          describe = SMOLRTSP_METHOD_DESCRIBE,
-                          setup = SMOLRTSP_METHOD_SETUP,
-                          play = SMOLRTSP_METHOD_PLAY,
-                          teardown = SMOLRTSP_METHOD_TEARDOWN;
-
-    ssize_t ret;
-    if (SmolRTSP_Method_eq(&method, &options)) {
-        ret = VCALL(controller, options, ctx, &req);
-    } else if (SmolRTSP_Method_eq(&method, &describe)) {
-        ret = VCALL(controller, describe, ctx, &req);
-    } else if (SmolRTSP_Method_eq(&method, &setup)) {
-        ret = VCALL(controller, setup, ctx, &req);
-    } else if (SmolRTSP_Method_eq(&method, &play)) {
-        ret = VCALL(controller, play, ctx, &req);
-    } else if (SmolRTSP_Method_eq(&method, &teardown)) {
-        ret = VCALL(controller, teardown, ctx, &req);
-    } else {
-        ret = VCALL(controller, unknown, ctx, &req);
-    }
-
-    VCALL(controller, after, ret, ctx, &req);
-
-    VTABLE(SmolRTSP_Context, SmolRTSP_Droppable).drop(ctx);
 }
 
 void *smolrtsp_libevent_ctx(SmolRTSP_Controller controller) {
