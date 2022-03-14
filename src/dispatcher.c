@@ -41,9 +41,11 @@ void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
             }
             otherwise return; // Partial input, skip it.
         }
-        of(SmolRTSP_ParseResult_Failure, _) {
+        of(SmolRTSP_ParseResult_Failure, e) {
             // TODO: handler properly.
-            fputs("Failed to parse the request", stderr);
+            fputs("Failed to parse the request: ", stderr);
+            SmolRTSP_ParseError_print(*e, smolrtsp_file_writer(stderr));
+            fputs(".\n", stderr);
 
             evbuffer_drain(input, buf.len);
             return;
