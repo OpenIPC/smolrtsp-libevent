@@ -19,7 +19,7 @@ typedef struct {
     SmolRTSP_Controller controller;
 } DispatchCtx;
 
-void smolrtsp_libevent_dispatch_cb(struct bufferevent *bev, void *arg) {
+void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
     assert(bev);
     assert(arg);
 
