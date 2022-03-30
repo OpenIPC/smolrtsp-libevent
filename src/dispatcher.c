@@ -44,7 +44,9 @@ void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
         of(SmolRTSP_ParseResult_Failure, e) {
             // TODO: handler properly.
             fputs("Failed to parse the request: ", stderr);
-            SmolRTSP_ParseError_print(*e, smolrtsp_file_writer(stderr));
+            const int err_bytes =
+                SmolRTSP_ParseError_print(*e, smolrtsp_file_writer(stderr));
+            assert(err_bytes >= 0);
             fputs(".\n", stderr);
 
             evbuffer_drain(input, buf.len);
