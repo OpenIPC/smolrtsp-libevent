@@ -5,6 +5,16 @@
 
 typedef struct evbuffer EvbufferWriter;
 
+static void EvbufferWriter_lock(VSelf) {
+    VSELF(EvbufferWriter);
+    evbuffer_lock(self);
+}
+
+static void EvbufferWriter_unlock(VSelf) {
+    VSELF(EvbufferWriter);
+    evbuffer_unlock(self);
+}
+
 static ssize_t EvbufferWriter_write(VSelf, CharSlice99 data) {
     VSELF(EvbufferWriter);
     assert(self);
