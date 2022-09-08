@@ -15,7 +15,7 @@ static void EvbufferWriter_unlock(VSelf) {
     evbuffer_unlock(self);
 }
 
-static bool BuffereventWriter_is_full(VSelf) {
+static bool EvbufferWriter_is_full(VSelf) {
     VSELF(EvbufferWriter);
 
     if (evbuffer_get_length(self) > 1024 * 1024) {
