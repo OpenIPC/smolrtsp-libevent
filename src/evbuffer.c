@@ -15,6 +15,15 @@ static void EvbufferWriter_unlock(VSelf) {
     evbuffer_unlock(self);
 }
 
+static bool BuffereventWriter_is_full(VSelf) {
+    VSELF(EvbufferWriter);
+
+    if (evbuffer_get_length(self) > 1024 * 1024) {
+        return true;
+    }
+    return false;
+}
+
 static ssize_t EvbufferWriter_write(VSelf, CharSlice99 data) {
     VSELF(EvbufferWriter);
     assert(self);
