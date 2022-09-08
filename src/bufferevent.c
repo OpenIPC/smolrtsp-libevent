@@ -24,14 +24,11 @@ static void BuffereventWriter_unlock(VSelf) {
     bufferevent_unlock(self);
 }
 
-static bool BuffereventWriter_is_full(VSelf) {
+static size_t BuffereventWriter_filled(VSelf) {
     VSELF(BuffereventWriter);
 
     struct evbuffer *output = bufferevent_get_output(self);
-    if (evbuffer_get_length(output) > 1024 * 1024) {
-        return true;
-    }
-    return false;
+    return evbuffer_get_length(output);
 }
 
 static int
