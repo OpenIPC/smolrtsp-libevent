@@ -14,6 +14,23 @@ static ssize_t BuffereventWriter_write(VSelf, CharSlice99 data) {
     return data.len;
 }
 
+static void BuffereventWriter_lock(VSelf) {
+    VSELF(BuffereventWriter);
+    bufferevent_lock(self);
+}
+
+static void BuffereventWriter_unlock(VSelf) {
+    VSELF(BuffereventWriter);
+    bufferevent_unlock(self);
+}
+
+static size_t BuffereventWriter_filled(VSelf) {
+    VSELF(BuffereventWriter);
+
+    struct evbuffer *output = bufferevent_get_output(self);
+    return evbuffer_get_length(output);
+}
+
 static int
 BuffereventWriter_vwritef(VSelf, const char *restrict fmt, va_list ap) {
     VSELF(BuffereventWriter);
