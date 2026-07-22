@@ -73,12 +73,28 @@ void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
             otherwise return; // Partial input, skip it.
         }
         of(SmolRTSP_ParseResult_Failure, e) {
-            // TODO: handler properly.
             fputs("Failed to parse the request: ", stderr);
             const int err_bytes =
                 SmolRTSP_ParseError_print(*e, smolrtsp_file_writer(stderr));
             assert(err_bytes >= 0);
             fputs(".\n", stderr);
+
+            /* Reply with `400 Bad Request` so a peer that sent a malformed
+             * request fails fast instead of hanging on a silently dropped
+             * connection. `cseq` is 0 here — the request did not parse. */
+            const SmolRTSP_Response resp = {
+                .start_line =
+                    {
+                        .version = {1, 0},
+                        .code = SMOLRTSP_STATUS_BAD_REQUEST,
+                        .reason = CharSlice99_from_str("Bad Request"),
+                    },
+                .header_map = SmolRTSP_HeaderMap_empty(),
+                .body = CharSlice99_empty(),
+                .cseq = req.cseq,
+            };
+            const ssize_t written = SmolRTSP_Response_serialize(&resp, conn);
+            (void)written;
 
             evbuffer_drain(input, buf.len);
             return;
