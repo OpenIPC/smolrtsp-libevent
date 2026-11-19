@@ -3,6 +3,8 @@
 #include <smolrtsp-libevent/bufferevent.h>
 #include <smolrtsp-libevent/evbuffer.h>
 
+#include <event2/event.h>
+
 #include <smolrtsp/context.h>
 #include <smolrtsp/types/request.h>
 #include <smolrtsp/types/response.h>
@@ -21,6 +23,28 @@ typedef struct {
     SmolRTSP_InterleavedHandler on_frame;
     void *on_frame_ctx;
 } DispatchCtx;
+
+/* More than SMOLRTSP_LIBEVENT_MAX_REQUEST bytes and still no complete request.
+ * Drop the bytes, stop reading, and hand the connection to the integrator's
+ * event callback as a read error -- the one path every integrator already has
+ * for tearing a connection down.
+ *
+ * No 413 is sent. A socket bufferevent's output cannot be flushed from inside
+ * a callback, and the event callback typically frees the bufferevent, which
+ * discards anything still queued; the peer that gets here is broken or
+ * hostile, and a closed connection is answer enough. */
+static void
+refuse_oversized_request(struct bufferevent *bev, struct evbuffer *input) {
+    evbuffer_drain(input, evbuffer_get_length(input));
+    bufferevent_disable(bev, EV_READ);
+
+    bufferevent_event_cb eventcb = NULL;
+    void *cbarg = NULL;
+    bufferevent_getcb(bev, NULL, NULL, &eventcb, &cbarg);
+    if (eventcb) {
+        eventcb(bev, BEV_EVENT_READING | BEV_EVENT_ERROR, cbarg);
+    }
+}
 
 void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
     assert(bev);
@@ -57,6 +81,11 @@ void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
             return; // wait for more bytes
         }
         break; // NotInterleaved — fall through to RTSP parse
+    }
+
+    if (evbuffer_get_length(input) > SMOLRTSP_LIBEVENT_MAX_REQUEST) {
+        refuse_oversized_request(bev, input);
+        return;
     }
 
     const CharSlice99 buf = smolrtsp_evbuffer_slice(input);

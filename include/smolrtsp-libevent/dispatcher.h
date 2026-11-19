@@ -6,6 +6,35 @@
 #include <slice99.h>
 #include <stdint.h>
 
+/**
+ * The most bytes of one RTSP request #smolrtsp_libevent_cb buffers before it
+ * gives up on the connection.
+ *
+ * A request that never completes -- a header with no CRLF, a URI with no
+ * space -- would otherwise be kept whole for as long as the peer keeps
+ * sending, and parsed again from its first byte on every read, so one
+ * connection could starve the event loop and then exhaust memory. No real
+ * RTSP request comes near this: headers are capped at
+ * #SMOLRTSP_MAX_HEADER_VALUE and bodies at #SMOLRTSP_MAX_CONTENT_LENGTH.
+ * Interleaved frames are drained before this is checked and do not count.
+ *
+ * Define this macro when compiling the library to override it.
+ */
+#ifndef SMOLRTSP_LIBEVENT_MAX_REQUEST
+#define SMOLRTSP_LIBEVENT_MAX_REQUEST (128 * 1024)
+#endif
+
+/**
+ * The read callback that parses requests and dispatches them to the
+ * controller.
+ *
+ * A request still incomplete at #SMOLRTSP_LIBEVENT_MAX_REQUEST bytes is
+ * dropped, reading is disabled, and the bufferevent's event callback (if any)
+ * is invoked with
+ * `BEV_EVENT_READING | BEV_EVENT_ERROR`, so the integrator tears the
+ * connection down the same way as for any other read error. The bufferevent
+ * must not be used after this callback returns in that case.
+ */
 void smolrtsp_libevent_cb(struct bufferevent *bev, void *ctx);
 
 void *smolrtsp_libevent_ctx(SmolRTSP_Controller controller);
