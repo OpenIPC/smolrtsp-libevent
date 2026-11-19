@@ -28,12 +28,13 @@
  * The read callback that parses requests and dispatches them to the
  * controller.
  *
- * A request still incomplete at #SMOLRTSP_LIBEVENT_MAX_REQUEST bytes is
- * dropped, reading is disabled, and the bufferevent's event callback (if any)
- * is invoked with
- * `BEV_EVENT_READING | BEV_EVENT_ERROR`, so the integrator tears the
- * connection down the same way as for any other read error. The bufferevent
- * must not be used after this callback returns in that case.
+ * A single request that cannot complete within #SMOLRTSP_LIBEVENT_MAX_REQUEST
+ * bytes is dropped, reading is disabled, and the bufferevent's event callback
+ * is invoked with `BEV_EVENT_READING | BEV_EVENT_ERROR`, so the integrator
+ * tears the connection down the same way as for any other read error. With no
+ * event callback registered, the bufferevent is freed instead. Either way it
+ * must not be used after this callback returns in that case. A complete
+ * request followed by more data -- a pipelined one -- is dispatched as usual.
  */
 void smolrtsp_libevent_cb(struct bufferevent *bev, void *ctx);
 
