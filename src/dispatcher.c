@@ -3,6 +3,8 @@
 #include <smolrtsp-libevent/bufferevent.h>
 #include <smolrtsp-libevent/evbuffer.h>
 
+#include <event2/event.h>
+
 #include <smolrtsp/context.h>
 #include <smolrtsp/types/request.h>
 #include <smolrtsp/types/response.h>
@@ -21,6 +23,32 @@ typedef struct {
     SmolRTSP_InterleavedHandler on_frame;
     void *on_frame_ctx;
 } DispatchCtx;
+
+/* More than SMOLRTSP_LIBEVENT_MAX_REQUEST bytes and still no complete request.
+ * Drop the bytes, stop reading, and hand the connection to the integrator's
+ * event callback as a read error -- the one path every integrator already has
+ * for tearing a connection down.
+ *
+ * No 413 is sent. A socket bufferevent's output cannot be flushed from inside
+ * a callback, and the event callback typically frees the bufferevent, which
+ * discards anything still queued; the peer that gets here is broken or
+ * hostile, and a closed connection is answer enough. */
+static void
+refuse_oversized_request(struct bufferevent *bev, struct evbuffer *input) {
+    evbuffer_drain(input, evbuffer_get_length(input));
+    bufferevent_disable(bev, EV_READ);
+
+    bufferevent_event_cb eventcb = NULL;
+    void *cbarg = NULL;
+    bufferevent_getcb(bev, NULL, NULL, &eventcb, &cbarg);
+    if (eventcb) {
+        eventcb(bev, BEV_EVENT_READING | BEV_EVENT_ERROR, cbarg);
+    } else {
+        /* Nobody to hand it to: a read-disabled connection would otherwise
+         * stay open for good. */
+        bufferevent_free(bev);
+    }
+}
 
 void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
     assert(bev);
@@ -59,7 +87,17 @@ void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
         break; // NotInterleaved — fall through to RTSP parse
     }
 
-    const CharSlice99 buf = smolrtsp_evbuffer_slice(input);
+    /* At most SMOLRTSP_LIBEVENT_MAX_REQUEST bytes are parsed, so the work per
+     * read stays bounded however much has arrived. A request that completes
+     * within them is dispatched even when more -- a pipelined request --
+     * follows; one that is still Partial there can only be larger, and is
+     * refused. */
+    const size_t buffered = evbuffer_get_length(input);
+    const size_t window = buffered < SMOLRTSP_LIBEVENT_MAX_REQUEST
+                              ? buffered
+                              : SMOLRTSP_LIBEVENT_MAX_REQUEST;
+    const CharSlice99 buf =
+        CharSlice99_new((char *)evbuffer_pullup(input, window), window);
 
     SmolRTSP_Request req = SmolRTSP_Request_uninit();
     const SmolRTSP_ParseResult res = SmolRTSP_Request_parse(&req, buf);
@@ -70,7 +108,12 @@ void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
                 smolrtsp_dispatch(conn, ctx->controller, &req);
                 evbuffer_drain(input, *offset);
             }
-            otherwise return; // Partial input, skip it.
+            otherwise {
+                if (buffered >= SMOLRTSP_LIBEVENT_MAX_REQUEST) {
+                    refuse_oversized_request(bev, input);
+                }
+                return; // Partial input, wait for more.
+            }
         }
         of(SmolRTSP_ParseResult_Failure, e) {
             fputs("Failed to parse the request: ", stderr);
@@ -96,7 +139,7 @@ void smolrtsp_libevent_cb(struct bufferevent *bev, void *arg) {
             const ssize_t written = SmolRTSP_Response_serialize(&resp, conn);
             (void)written;
 
-            evbuffer_drain(input, buf.len);
+            evbuffer_drain(input, buffered);
             return;
         }
     }
